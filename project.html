@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>과제 관리</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f2f5;
+            color: #333;
+            padding: 20px;
+        }
+        h1 {
+            color: #007bff;
+            text-align: center;
+        }
+        form {
+            background-color: #ffffff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        label {
+            display: block;
+            margin-top: 10px;
+            font-weight: bold;
+        }
+        input, button {
+            padding: 10px;
+            margin-top: 5px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+            font-size: 16px;
+        }
+        input {
+            width: calc(100% - 22px);
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        ul {
+            list-style-type: none;
+            padding: 0;
+        }
+        li {
+            background-color: #ffffff;
+            margin-bottom: 10px;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        .input-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .input-group input {
+            flex: 1;
+        }
+        .assignment-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .d-day {
+            font-weight: bold;
+            color: #e74c3c;
+        }
+        /* 알림 박스 스타일 */
+        .notification-box {
+            display: none;
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 20px;
+            background-color: #ffdddd;
+            color: #d8000c;
+            border: 1px solid #d8000c;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            z-index: 1000;
+        }
+        .notification-box.show {
+            display: block;
+        }
+        .notification-box button {
+            background-color: #d8000c;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <h1>과제 관리</h1>
+    <form id="assignmentForm">
+        <label for="assignmentName">과제 이름:</label>
+        <input type="text" id="assignmentName" required>
+        
+        <label for="assignmentYear">마감일:</label>
+        <div class="input-group">
+            <input type="number" id="assignmentYear" min="2023" required placeholder="연도">
+            <input type="number" id="assignmentMonth" min="1" max="12" required placeholder="월">
+            <input type="number" id="assignmentDay" min="1" max="31" required placeholder="일">
+        </div>
+
+        <label for="notificationHour">알림 시간:</label>
+        <div class="input-group">
+            <input type="number" id="notificationHour" min="0" max="23" required placeholder="시">
+            <input type="number" id="notificationMinute" min="0" max="59" required placeholder="분">
+        </div>
+
+        <button type="button" onclick="addAssignment()">과제 추가</button>
+    </form>
+
+    <h2>과제 목록</h2>
+    <ul id="assignmentList"></ul>
+
+    <!-- 알림 박스 -->
+    <div id="notificationBox" class="notification-box">
+        <span id="notificationMessage"></span>
+        <button onclick="hideNotification()">닫기</button>
+    </div>
+
+    <script>
+        let assignments = [];
+
+        // 페이지 로드 시 알림 권한 요청
+        document.addEventListener('DOMContentLoaded', () => {
+            if (Notification.permission !== 'granted') {
+                Notification.requestPermission().then(permission => {
+                    if (permission !== 'granted') {
+                        alert('알림 권한이 거부되었습니다. 알림을 사용하려면 권한을 허용하세요.');
+                    }
+                });
+            }
+        });
+
+        function addAssignment() {
+            const name = document.getElementById('assignmentName').value;
+            const year = parseInt(document.getElementById('assignmentYear').value);
+            const month = parseInt(document.getElementById('assignmentMonth').value);
+            const day = parseInt(document.getElementById('assignmentDay').value);
+            const notificationHour = parseInt(document.getElementById('notificationHour').value);
+            const notificationMinute = parseInt(document.getElementById('notificationMinute').value);
+
+            const daysLeft = calculateDaysLeft(year, month, day);
+
+            const assignment = {
+                name: name,
+                day: day,
+                month: month,
+                year: year,
+                notificationHour: notificationHour,
+                notificationMinute: notificationMinute,
+                daysLeft: daysLeft
+            };
+            assignments.push(assignment);
+
+            const assignmentList = document.getElementById('assignmentList');
+            const listItem = document.createElement('li');
+            listItem.innerHTML = `<div class="assignment-item">
+                                    <span>${name}, 마감일: ${year}/${month}/${day}, 알림 시간: ${notificationHour}시 ${notificationMinute}분</span>
+                                    <span class="d-day">${daysLeft}일 남음</span>
+                                  </div>`;
+            assignmentList.appendChild(listItem);
+
+            console.log(`Added assignment: ${name}, Due: ${year}/${month}/${day}, Notification hour: ${notificationHour}:${notificationMinute}, Days left: ${daysLeft}`);
+
+            // 입력 필드 초기화
+            document.getElementById('assignmentForm').reset();
+
+            // 알림 확인을 위해 즉시 마감일 확인
+            checkDeadlines();
+        }
+
+        function calculateDaysLeft(year, month, day) {
+            const currentDate = new Date();
+            const dueDate = new Date(year, month - 1, day); // month는 0부터 시작
+            const timeDiff = dueDate - currentDate;
+            const daysDiff = Math.ceil(timeDiff / (1000 * 60 * 60 * 24));
+            return daysDiff;
+        }
+
+        function checkDeadlines() {
+            const currentDate = new Date();
+            assignments.forEach(assignment => {
+                const dueDate = new Date(assignment.year, assignment.month - 1, assignment.day, assignment.notificationHour, assignment.notificationMinute);
+                console.log(`Checking assignment: ${assignment.name}, Due date: ${dueDate.toDateString()} ${dueDate.getHours()}:${dueDate.getMinutes()}, Current date: ${currentDate.toDateString()} ${currentDate.getHours()}:${currentDate.getMinutes()}`);
+                if (currentDate.toDateString() === dueDate.toDateString() && currentDate.getHours() === dueDate.getHours() && currentDate.getMinutes() === dueDate.getMinutes()) {
+                    console.log(`Deadline today for assignment: ${assignment.name}`);
+                    showNotification(`과제 "${assignment.name}"의 마감일입니다!`);
+                }
+            });
+        }
+
+        function showNotification(message) {
+            // 브라우저 알림
+            if (Notification.permission === 'granted') {
+                new Notification(message);
+            }
+            
+            // 웹사이트 내 알림 박스
+            const notificationBox = document.getElementById('notificationBox');
+            const notificationMessage = document.getElementById('notificationMessage');
+            notificationMessage.textContent = message;
+            notificationBox.classList.add('show');
+
+            // 알림 박스는 5초 후 자동으로 사라지게 설정
+            setTimeout(() => {
+                hideNotification();
+            }, 5000);
+        }
+
+        function hideNotification() {
+            const notificationBox = document.getElementById('notificationBox');
+            notificationBox.classList.remove('show');
+        }
+
+        // 1분마다 마감일 확인
+        setInterval(checkDeadlines, 60000);
+    </script>
+</body>
+</html>
